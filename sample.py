@@ -39,3 +39,16 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
     print('Blob {} downloaded to {}.'.format(
         source_blob_name,
         destination_file_name))
+    
+    
+    
+    
+# retry on connection fails     
+from urllib3.exceptions import ProtocolError
+from google.api_core import retry
+
+predicate = retry.if_exception_type(
+    ConnectionResetError, ProtocolError)
+reset_retry = retry.Retry(predicate)
+
+data = reset_retry(blob.download_as_string)()
