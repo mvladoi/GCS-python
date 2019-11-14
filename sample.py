@@ -52,3 +52,7 @@ predicate = retry.if_exception_type(
 reset_retry = retry.Retry(predicate)
 
 data = reset_retry(blob.download_as_string)()
+
+
+
+https://dev.to/sethmlarson/python-data-streaming-to-google-cloud-storage-with-resumable-uploads-458h
