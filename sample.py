@@ -72,6 +72,8 @@ blob.download_to_filename('test.ipynb')
 
 !jupyter nbconvert --to html test.ipynb
 !jupyter nbconvert --to python test.ipynb
+# multiple files 
+# !jupyter nbconvert notebook*.ipynb
 
 IFrame('test.html', 600, 200)
 IFrame('test.py', 600, 200)
