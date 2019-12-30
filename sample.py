@@ -56,3 +56,24 @@ data = reset_retry(blob.download_as_string)()
 
 
 https://dev.to/sethmlarson/python-data-streaming-to-google-cloud-storage-with-resumable-uploads-458h
+ 
+ 
+ 
+# convert a ipynb file to py file
+# https://stackoverflow.com/questions/59530429/how-to-convert-multiple-ipynb-files-which-are-in-gcp-to-py-files/59530544#59530544
+
+from google.cloud import storage
+from IPython.display import IFrame
+
+client = storage.Client()
+bucket = client.get_bucket('test-vladoi')
+blob = bucket.get_blob('test.ipynb')
+blob.download_to_filename('test.ipynb')
+
+!jupyter nbconvert --to html test.ipynb
+!jupyter nbconvert --to python test.ipynb
+
+IFrame('test.html', 600, 200)
+IFrame('test.py', 600, 200)
+ 
+
