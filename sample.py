@@ -82,12 +82,15 @@ IFrame('test.py', 600, 200)
 
 gcloud sql instances describe mysql-marian | grep settingsVersion
 
+SETTINGS_VERSION=$(gcloud sql instances describe mysql-marian | grep settingsVersion | tr ":" "\n" | awk 'NR==2')
+ACCESS_TOKEN=$(gcloud auth print-access-token)
+
 curl --request POST \
-  'https://sqladmin.googleapis.com/sql/v1beta4/projects/wave25-vladoi/instances/mysql-marian/failover?key=[YOUR_API_KEY]' \
-  --header 'Authorization: Bearer [YOUR_ACCESS_TOKEN]' \
+  'https://sqladmin.googleapis.com/sql/v1beta4/projects/wave25-vladoi/instances/mysql-marian/failover' \
+  --header 'Authorization: Bearer $ACCESS_TOKEN' \
   --header 'Accept: application/json' \
   --header 'Content-Type: application/json' \
-  --data '{"failoverContext":{"kind":"sql#failoverContext","settingsVersion":"42"}}' \
+  --data '{"failoverContext":{"kind":"sql#failoverContext","settingsVersion" $SETTINGS_VERSION:}}' \
   --compressed
 
 
