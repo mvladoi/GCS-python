@@ -77,5 +77,37 @@ blob.download_to_filename('test.ipynb')
 
 IFrame('test.html', 600, 200)
 IFrame('test.py', 600, 200)
+
+
+
+gcloud sql instances describe mysql-marian | grep settingsVersion
+
+curl --request POST \
+  'https://sqladmin.googleapis.com/sql/v1beta4/projects/wave25-vladoi/instances/mysql-marian/failover?key=[YOUR_API_KEY]' \
+  --header 'Authorization: Bearer [YOUR_ACCESS_TOKEN]' \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --data '{"failoverContext":{"kind":"sql#failoverContext","settingsVersion":"42"}}' \
+  --compressed
+
+
+The response: 
+
+{
+  "kind": "sql#operation",
+  "targetLink": "https://content-sqladmin.googleapis.com/sql/v1beta4/projects/my-project/instances/my-instance
+  "status": "PENDING",
+  "user": "user@gmail.com",
+  "insertTime": "2019-12-30T16:30:29.446Z",
+  "operationType": "FAILOVER",
+  "name": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  "targetId": "my-instance
+  "selfLink": "https://content-sqladmin.googleapis.com/sql/v1beta4/projects/my-projects/operations/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "targetProject": "my-project"
+}
+
+
+
+
  
 
