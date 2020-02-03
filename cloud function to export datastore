@@ -1,0 +1,67 @@
+0
+
+I tried to reproduce your use case:
+
+Run the command:
+
+ gcloud app decribe 
+ # .......
+ #locationId: europe-west2
+Make sure that your export bucket and your cloud function are deployed in the same location.
+
+Your cloud function will use App Engine default service account.
+
+ PROJECT_ID@appspot.gserviceaccount.com  
+Assign to this service account the role Datastore Import Export Admin
+
+(I would recommend to create a new service account for your cloud function, not using App Engine default service account.)
+
+Create the cloud function:
+
+a.main.py
+
+def export_datastore(request):
+    import google.auth
+    import google.auth.transport.requests
+    import json
+    import requests
+
+
+    #Get the Access Token
+    creds, project_id = google.auth.default()
+    auth_req = google.auth.transport.requests.Request()
+    creds.refresh(auth_req)
+
+
+    token = creds.token  
+    output_url_prefix = 'gs://your-bucket'
+    url = 'https://datastore.googleapis.com/v1/projects/{}:export'.format(project_id)
+
+    #We export all kinds and all namespaces
+    entity_filter = {
+                      'kinds': [],
+                      'namespace_ids': []
+                  }
+
+
+    request = {
+             'project_id': project_id,
+             'output_url_prefix': output_url_prefix,
+             'entity_filter': entity_filter
+           }
+
+
+    headers = {
+                 'Content-Type': 'application/json',
+                 'Authorization': 'Bearer ' + token,
+                 'Accept': 'application/json'
+            }
+    #Call the API to make the Datastore export
+    r = requests.post(url, data=json.dumps(request), headers=headers)
+    print(r.json())
+    return('Export command sent')
+b. requirements.txt
+
+  # Function dependencies, for example:
+  google-auth
+Use Google Cloud Scheduler to call the cloud function every 24 hours.
