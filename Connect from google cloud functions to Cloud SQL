@@ -1,0 +1,128 @@
+#CONNECTING FROM GOOGLE CLOUD FUNCTIONS TO CLOUD SQL USING TCP AND UNIX DOMAIN SOCKETS 2020
+
+1.Create a new project 
+
+    gcloud projects create gcf-to-sql
+    gcloud config set project gcf-to-sql
+    gcloud projects describe gcf-to-sql
+
+2.Enable billing  on you project: https://cloud.google.com/billing/docs/how-to/modify-project
+
+3.Set the compute project-info metadata:
+
+    gcloud compute project-info describe --project gcf-to-sql
+    #Enable the Api, and you can check that default-region,google-compute-default-zone are not set. Set the metadata.
+    gcloud compute project-info add-metadata --metadata google-compute-default-region=europe-west2,google-compute-default-zone=europe-west2-b
+
+4.Enable Service Networking Api:
+
+    gcloud services list --available
+    gcloud services enable servicenetworking.googleapis.com
+
+5.Create 2 cloud sql instances, (one with internall ip and one with public ip)- https://cloud.google.com/sql/docs/mysql/create-instance:
+
+
+6.a Cloud Sql Instance with external ip:
+
+    #Create the sql instance in the 
+    gcloud --project=con-ae-to-sql beta sql instances create database-external --region=europe-west2
+    #Set the password for the "root@%" MySQL user:
+    gcloud sql users set-password root --host=% --instance database-external --password root 
+    #Create a user
+    gcloud sql users create user_name --host=% --instance=database-external  --password=user_password
+    #Create a database
+    gcloud sql databases create user_database --instance=database-external
+    gcloud sql databases list --instance=database-external
+
+6.b Cloud Sql Instance with internal ip:
+
+    i.#Create a private connection to Google so that the VM instances in the default VPC network can use private services access to reach Google services that support it.
+
+    gcloud compute addresses create google-managed-services-my-network     --global  --purpose=VPC_PEERING --prefix-length=16  --description="peering range for Google"  --network=default --project=con-ae-to-sql
+    gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=google-managed-services-my-network  --network=default  --project=con-ae-to-sql
+    #Check whether the operation was successful.
+    gcloud services vpc-peerings operations describe     --name=operations/pssn.dacc3510-ebc6-40bd-a07b-8c79c1f4fa9a
+    #Listing private connections
+    gcloud services vpc-peerings list --network=default --project=con-ae-to-sql
+     
+    ii.Create the instance:
+
+    gcloud --project=con-ae-to-sql beta sql instances create database-ipinternal --network=default --no-assign-ip  --region=europe-west2
+    #Set the password for the "root@%" MySQL user:
+    gcloud sql users set-password root --host=% --instance database-ipinternal --password root
+    #Create a user
+    gcloud sql users create user_name --host=% --instance=database-ipinternal  --password=user_password
+    #Create a database
+    gcloud sql databases create user_database --instance=database-ipinternal
+    gcloud sql databases list --instance=database-ipinternal 
+
+
+    gcloud sql instances list
+    gcloud sql instances describe database-external
+    gcloud sql instances describe database-ipinternal
+    #Remember the instances connectionName
+
+OK, so we have two mysql instances, we will connect from Google Cloud Functions to database-ipinternal using Serverless Access and TCP, and from Google Cloud Functions to database-external using unix domain socket.
+
+7.Enable the Cloud SQL Admin API
+
+    gcloud services list --available
+    gcloud services enable sqladmin.googleapis.com
+
+Note: By default, Cloud Functions does not support connecting to the Cloud SQL instance using TCP. Your code should not try to access the instance using an IP address (such as 127.0.0.1 or 172.17.0.1) unless you have configured Serverless VPC Access.
+
+8.a Ensure the Serverless VPC Access API is enabled for your project:
+    
+    gcloud services enable vpcaccess.googleapis.com
+
+8.b Create a connector:
+
+    gcloud compute networks vpc-access connectors create serverless-connector --network default --region europe-west2 --range 10.10.0.0/28
+    #Verify that your connector is in the READY state before using it
+    gcloud compute networks vpc-access connectors describe serverless-connector --region europe-west2
+
+9.Create a service account for your cloud function. Ensure that the service account for your service has the following IAM roles: Cloud SQL Client, and for connecting from App Engine Standard to Cloud Sql on internal ip we need also the role Compute Network User.
+
+    gcloud iam service-accounts create cloud-function-to-sql
+    gcloud projects add-iam-policy-binding gcf-to-sql --member serviceAccount:cloud-function-to-sql@gcf-to-sql.iam.gserviceaccount.com   --role roles/cloudsql.client
+    gcloud projects add-iam-policy-binding gcf-to-sql --member serviceAccount:cloud-function-to-sql@gcf-to-sql.iam.gserviceaccount.com  --role roles/compute.networkUser
+
+**Now that I configured the set up**
+
+**1. Connect from Google Cloud Functions to Cloud Sql using Tcp and unix domanin socket**
+
+    cd app-engine-standard/
+    ls
+    #main.py requirements.txt
+
+    cat requirements.txt
+    sqlalchemy
+    pymysql
+          
+    cat main.py 
+    import pymysql
+    from sqlalchemy import create_engine
+
+
+     def gcf_to_sql(request):
+
+        engine_tcp = create_engine('mysql+pymysql://user_name:user_password@10.36.0.3:3306')
+        existing_databases_tcp = engine_tcp.execute("SHOW DATABASES;")
+        con_tcp = "Connecting from Google Cloud Functions to Cloud SQL using TCP: databases => " + str([d[0] for d in existing_databases_tcp]).strip('[]') + "\n"
+        engine_unix_socket = create_engine('mysql+pymysql://user_name:user_password@/user_database?unix_socket=/cloudsql/gcf-to-sql:europe-west2:database-external')
+        existing_databases_unix_socket = engine_unix_socket.execute("SHOW DATABASES;")
+        con_unix_socket = "Connecting from Google Cloud Function  to Cloud SQL using Unix Sockets: tables in sys database:  => " + str([d[0] for d in existing_databases_unix_socket]).strip('[]') + "\n"
+        return con_tcp + con_unix_socket
+         
+2.Deploy the cloud function:
+
+    gcloud beta functions deploy gcf_to_sql --runtime python37 --region europe-west2 --vpc-connector projects/gcf-to-sql/locations/europe-west2/connectors/serverless-connector  --trigger-http
+     
+    
+3.Go to Cloud Function, choose `gcf-to-sql`, Testing, TEST THE FUNCTION: 
+
+    #Connecting from Google Cloud Functions to Cloud SQL using TCP: databases => 'information_schema', 'mysql', 'performance_schema', 'sys', 'user_database'
+    #Connecting from Google Cloud Function  to Cloud SQL using Unix Sockets: tables in sys database:  => 'information_schema', 'mysql', 'performance_schema', 'sys', 'user_database'
+
+
+SUCCESS!
