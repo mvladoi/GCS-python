@@ -1,0 +1,215 @@
+> App Engine standard enviroments do not support connecting to the Cloud
+> SQL instance using TCP. Your code should not try to access the
+> instance using an IP address (such as 127.0.0.1 or 172.17.0.1) unless
+> you have configured Serverless VPC Access.
+
+From your question I understand that you are using `vpc_access_connector`. Therefore I assume that you configured Serverless VPC Access. 
+
+The code used in main.py is for connecting to Cloud SQL instance's using unix domain socket and not TCP.
+
+
+#EDIT:
+
+#CONNECTING FROM APP ENGINE TO CLOUD SQL USING TCP AND UNIX DOMAIN SOCKETS
+
+1.Create a new project 
+
+    gcloud projects create con-ae-to-sql
+    gcloud projects describe con-ae-to-sql
+
+2.Enable billing  on you project: https://cloud.google.com/billing/docs/how-to/modify-project
+
+3.Run the following gcloud command to enable App Engine and create the associated application resources
+
+    gcloud app create -region europe-west2
+    gcloud app describe
+    #Remember the location of you App Engine aplication, because we will create all our resources on the same region
+
+4.Set the compute project-info metadata:
+
+     gcloud compute project-info describe --project con-ae-to-sql
+     #Enable the Api, and you can check that default-region,google-compute-default-zone are not set. Set the metadata.
+     gcloud compute project-info add-metadata --metadata google-compute-default-region=europe-west2,google-compute-default-zone=europe-west2-b
+
+
+5.Enable Service Networking Api:
+
+    gcloud services list --available
+    gcloud services enable servicenetworking.googleapis.com
+
+6.Create 2 cloud sql instances, (one with internall ip and one with public ip)- https://cloud.google.com/sql/docs/mysql/create-instance:
+
+
+6.a Cloud Sql Instance with external ip:
+
+    #Create the sql instance in the same region as App Engine Application
+    gcloud --project=con-ae-to-sql beta sql instances create database-external --region=europe-west2
+    #Set the password for the "root@%" MySQL user:
+    gcloud sql users set-password root --host=% --instance database-external --password root 
+    #Create a user
+    gcloud sql users create user_name --host=% --instance=database-external  --password=user_password
+    #Create a database
+    gcloud sql databases create user_database --instance=database-external
+    gcloud sql databases list --instance=database-external
+
+6.b Cloud Sql Instance with internal ip:
+
+    i.#Create a private connection to Google so that the VM instances in the default VPC network can use private services access to reach Google services that support it.
+
+    gcloud compute addresses create google-managed-services-my-network     --global  --purpose=VPC_PEERING --prefix-length=16  --description="peering range for Google"  --network=default --project=con-ae-to-sql
+    gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=google-managed-services-my-network  --network=default  --project=con-ae-to-sql
+    #Check whether the operation was successful.
+    gcloud services vpc-peerings operations describe     --name=operations/pssn.dacc3510-ebc6-40bd-a07b-8c79c1f4fa9a
+    #Listing private connections
+    gcloud services vpc-peerings list --network=default --project=con-ae-to-sql
+     
+    ii.Create the instance:
+
+    gcloud --project=con-ae-to-sql beta sql instances create database-ipinternal --network=default --no-assign-ip  --region=europe-west2
+    #Set the password for the "root@%" MySQL user:
+    gcloud sql users set-password root --host=% --instance database-ipinternal --password root
+    #Create a user
+    gcloud sql users create user_name --host=% --instance=database-ipinternal  --password=user_password
+    #Create a database
+    gcloud sql databases create user_database --instance=database-ipinternal
+    gcloud sql databases list --instance=database-ipinternal 
+
+
+    gcloud sql instances list
+    gcloud sql instances describe database-external
+    gcloud sql instances describe database-ipinternal
+    #Remember the instances connectionName
+
+OK, so we have two mysql instances, we will connect from App Engine Standard to database-ipinternal using Serverless Access and TCP, from App Engine Standard to database-external using unix domain socket, from App Engine Flex to database-ipinternal using TCP, and from App Engine Flex to database-external using unix domain socket.
+ 
+7.Enable the Cloud SQL Admin API
+
+    gcloud services list --available
+    gcloud services enable sqladmin.googleapis.com
+
+8.At this time App Engine standard enviroments do not support connecting to the Cloud SQL instance using TCP. Your code should not try to access the instance using an IP address (such as 127.0.0.1 or 172.17.0.1) unless you have configured Serverless VPC Access.So let's configure Serverless VPC Access.
+
+8.a Ensure the Serverless VPC Access API is enabled for your project:
+    
+    gcloud services enable vpcaccess.googleapis.com
+
+8.b Create a connector:
+
+    gcloud compute networks vpc-access connectors create serverless-connector --network default --region europe-west2 --range 10.10.0.0/28
+    #Verify that your connector is in the READY state before using it
+    gcloud compute networks vpc-access connectors describe serverless-connector --region europe-west2
+
+9.App Engine uses a service account to authorize your connections to Cloud SQL. This service account must have the correct IAM permissions to successfully connect. Unless otherwise configured, the default service account is in the format service-PROJECT_NUMBER@gae-api-prod.google.com.iam.gserviceaccount.com. Ensure that the service account for your service has the following IAM roles: Cloud SQL Client, and for connecting from App Engine Standard to Cloud Sql on internal ip we need also the role Compute Network User.
+
+    gcloud iam service-accounts list
+    gcloud projects add-iam-policy-binding con-ae-to-sql --member serviceAccount:con-ae-to-sql@appspot.gserviceaccount.com --role roles/cloudsql.client
+    gcloud projects add-iam-policy-binding con-ae-to-sql --member serviceAccount:con-ae-to-sql@appspot.gserviceaccount.com --role roles/compute.networkUser
+
+**Now that I configured the set up**
+
+**1. Connect from App Engine Standard to Cloud Sql using Tcp and unix domanin socket**
+
+    cd app-engine-standard/
+    ls
+    #app.yaml  main.py requirements.txt
+
+    cat requirements.txt
+    Flask==1.1.1
+    sqlalchemy
+    pymysql
+    uwsgi==2.0.18
+
+    cat app.yaml
+    runtime: python37
+    entrypoint: uwsgi --http-socket :8080 --wsgi-file main.py --callable app --master --processes 1 --threads 2
+    vpc_access_connector:
+        name: "projects/con-ae-to-sql/locations/europe-west2/connectors/serverless-connector" 
+
+    
+
+    cat main.py
+
+    from flask import Flask
+    import pymysql
+    from sqlalchemy import create_engine
+
+    # If `entrypoint` is not defined in app.yaml, App Engine will look for an app
+    # called `app` in `main.py`.
+    app = Flask(__name__)
+
+    @app.route('/')
+    def hello():
+        engine_tcp = create_engine('mysql+pymysql://user_name:user_password@internal-ip-of-database-ipinternal:3306')
+        existing_databases_tcp = engine_tcp.execute("SHOW DATABASES;")
+        con_tcp = "Connecting from APP Engine Standard to Cloud SQL using TCP: databases => " + str([d[0] for d in existing_databases_tcp]).strip('[]') + "\n"
+        engine_unix_socket = create_engine('mysql+pymysql://user_name:user_password@/user_database?unix_socket=/cloudsql/con-ae-to-sql:europe-west2:database-external')
+        existing_databases_unix_socket = engine_unix_socket.execute("SHOW DATABASES;")
+        con_unix_socket = "Connecting from APP Engine Standard to Cloud SQL using Unix Sockets: tables in sys database:  => " + str([d[0] for d in existing_databases_unix_socket]).strip('[]') + "\n"
+        return con_tcp + con_unix_socket
+
+
+
+    gcloud app deploy -q
+    gcloud app browse
+    #Go to https://con-ae-to-sql.appspot.com
+    #Connecting from APP Engine Standard to Cloud SQL using TCP: databases => 'information_schema', 'user_database', 'mysql', 'performance_schema', 'sys' Connecting from APP Engine Standard to Cloud SQL using Unix Sockets: tables in sys database: => 'information_schema', 'user_database', 'mysql', 'performance_schema', 'sys'
+
+SUCCESS!
+
+
+**2.Connect from App Engine Flex to Cloud Sql using Tcp and unix domanin socket**
+
+    cd app-engine-flex/
+    ls
+    #app.yaml  main.py requirements.txt
+
+    cat requirements.txt
+    Flask==1.1.1
+    gunicorn==19.9.0
+    sqlalchemy
+    pymysql
+  
+    cat app.yaml
+    runtime: python
+    env: flex
+    entrypoint: gunicorn -b :$PORT main:app
+    runtime_config:
+      python_version: 3
+    #Using TCP and unix sockets domain
+    beta_settings:
+     cloud_sql_instances: con-ae-to-sql:europe-west2:database-ipinternal=tcp:3306,con-ae-to-sql:europe-west2:database-external
+    manual_scaling:
+      instances: 1
+    resources:
+      cpu: 1
+      memory_gb: 0.5
+      disk_size_gb: 10
+
+
+    cat main.py
+
+    from flask import Flask
+    import pymysql
+    from sqlalchemy import create_engine
+   
+    app = Flask(__name__)
+
+    @app.route('/')
+    def hello():
+        engine_tcp = create_engine('mysql+pymysql://user_name:user_password@internal-ip-of-database-ipinternal:3306')
+        existing_databases_tcp = engine_tcp.execute("SHOW DATABASES;")
+        con_tcp = "Connecting from APP Engine Flex to Cloud SQL using TCP: databases => " + str([d[0] for d in existing_databases_tcp]).strip('[]') + "\n"
+
+        engine_unix_socket = create_engine('mysql+pymysql://user_name:user_password@/user_database?unix_socket=/cloudsql/con-ae-to-sql:europe-west2:database-external')
+        existing_databases_unix_socket = engine_unix_socket.execute("SHOW DATABASES;")
+        con_unix_socket = "Connecting from APP Engine Flex to Cloud SQL using Unix Sockets: tables in sys database:  => " + str([d[0] for d in existing_databases_unix_socket]).strip('[]') + "\n"
+        return con_tcp + con_unix_socket
+
+
+    gcloud app deploy -q
+    gcloud app browse
+    #Go to https://con-ae-to-sql.appspot.com
+    #Connecting from APP Engine Flex to Cloud SQL using TCP: databases => 'information_schema', 'marian', 'mysql', 'performance_schema', 'sys' Connecting from APP Engine Flex to Cloud SQL using Unix Sockets: tables in sys database: => 'information_schema', 'marian', 'mysql', 'performance_schema', 'sys'
+
+
+SUCCESS!
