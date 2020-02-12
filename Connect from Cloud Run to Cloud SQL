@@ -1,0 +1,85 @@
+#CONNECTING FROM CLOUD RUN (fully managed) TO CLOUD SQL USING UNIX DOMAIN SOCKETS (Java)
+
+> At this time Cloud Run (fully managed) does not support connecting to
+> the Cloud SQL instance using TCP. Your code should not try to access the instance
+> using an IP address such as 127.0.0.1 or 172.17.0.1.
+> [link](https://cloud.google.com/sql/docs/mysql/connect-run)
+
+1.[Install and initialize the Cloud SDK](https://cloud.google.com/sdk/docs/?authuser=1)
+
+2.Update components:
+
+    gcloud components update
+
+3.Create a new project 
+
+    gcloud projects create run-to-sql
+    gcloud config set project run-to-sql
+    gcloud projects describe run-to-sql
+
+4.Enable billing 
+  
+    gcloud alpha billing projects link  run-to-sql --billing-account  XXXXXX-XXXXXX-XXXX
+
+5.Set the compute project-info metadata:
+
+    gcloud compute project-info describe --project run-to-sql
+    gcloud compute project-info add-metadata --metadata google-compute-default-region=europe-west2,google-compute-default-zone=europe-west2-b
+
+6.Enable the Cloud SQL Admin API:
+
+     gcloud services enable sqladmin.googleapis.com
+
+7.Create a Cloud SQL instance with public Ip
+
+    #Create the sql instance in the same region as App Engine Application
+    gcloud --project=run-to-sql beta sql instances create database-external --region=europe-west2
+    #Set the password for the "root@%" MySQL user:
+    gcloud sql users set-password root --host=% --instance database-external --password root 
+    #Create a user
+    gcloud sql users create user_name --host=% --instance=database-external  --password=user_password
+    #Create a database
+    gcloud sql databases create user_database --instance=database-external
+    gcloud sql databases list --instance=database-external
+    gcloud sql instances list
+
+> Cloud Run (fully managed) uses a service account to authorize your
+> connections to Cloud SQL. This service account must have the correct
+> IAM permissions to successfully connect. Unless otherwise configured,
+> the default service account is in the format
+> PROJECT_NUMBER-compute@developer.gserviceaccount.com.
+
+
+8.Ensure that the service account for your service has one of the following IAM roles:Cloud SQL Client (preferred)
+
+    gcloud iam service-accounts list
+    gcloud projects add-iam-policy-binding run-to-sql --member serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com. --role roles/cloudsql.client
+
+9.Clone the java-docs-repository
+
+    git clone https://github.com/GoogleCloudPlatform/java-docs-samples.git
+    cd java-docs-samples/cloud-sql/mysql/servlet/
+    ls
+    #Dockerfile  pom.xml  README.md  src
+
+10.Inspect the file that handle the connection to Cloud SQL
+
+     cat src/main/java/com/example/cloudsql/ConnectionPoolContextListener.java
+
+11.Containerizing the app and uploading it to Container Registry
+
+    gcloud builds submit --tag gcr.io/run-to-sql/run-mysql
+   
+12.Deploy the service to Cloud Run
+
+    gcloud run deploy run-mysql --image gcr.io/run-to-sql/run-mysql
+
+13.Configure the service for use with Cloud Run
+
+    gcloud run services update run-mysql --add-cloudsql-instances run-to-sql:europe-west2:database-external --set-env-vars CLOUD_SQL_CONNECTION_NAME=run-to-sql:europe-west2:database-external  DB_USER=user_name,DB_PASS=user_password,DB_NAME=user_database
+
+14.Test it
+
+     curl -H "Authorization: Bearer $(gcloud auth print-identity-token)"   https://run-mysql-xxxxxxxx-xx.x.run.app
+
+SUCCESS!
