@@ -81,7 +81,7 @@ Note: By default, Cloud Functions does not support connecting to the Cloud SQL i
     #Verify that your connector is in the READY state before using it
     gcloud compute networks vpc-access connectors describe serverless-connector --region europe-west2
 
-9.Create a service account for your cloud function. Ensure that the service account for your service has the following IAM roles: Cloud SQL Client, and for connecting from App Engine Standard to Cloud Sql on internal ip we need also the role Compute Network User.
+9.Create a service account for your cloud function. Ensure that the service account for your service has the following IAM roles: Cloud SQL Client, and for connecting from Cloud Functions to Cloud Sql on internal ip we need also the role Compute Network User.
 
     gcloud iam service-accounts create cloud-function-to-sql
     gcloud projects add-iam-policy-binding gcf-to-sql --member serviceAccount:cloud-function-to-sql@gcf-to-sql.iam.gserviceaccount.com   --role roles/cloudsql.client
@@ -116,7 +116,7 @@ Note: By default, Cloud Functions does not support connecting to the Cloud SQL i
          
 2.Deploy the cloud function:
 
-    gcloud beta functions deploy gcf_to_sql --runtime python37 --region europe-west2 --vpc-connector projects/gcf-to-sql/locations/europe-west2/connectors/serverless-connector  --trigger-http
+    gcloud beta functions deploy gcf_to_sql --runtime python37 --region europe-west2 --service-account cloud-function-to-sql --vpc-connector projects/gcf-to-sql/locations/europe-west2/connectors/serverless-connector  --trigger-http
      
     
 3.Go to Cloud Function, choose `gcf-to-sql`, Testing, TEST THE FUNCTION: 
