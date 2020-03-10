@@ -1,0 +1,39 @@
+I did this in python:
+
+1. Create the first cloud function `hello_world`.
+
+2. Zip the function and move it to Google Cloud Storage.
+
+3. Create the second cloud function (by default is created with App Engine default service account, which has Editor Role. In case you will assign a different service account as identity, make sure your service account has the permissions to query metadata server and to create cloud functions)
+
+```
+
+import requests
+import json
+
+
+def make_func(request):
+    
+     
+    # Get the access token from the metadata server
+    metadata_server_token_url = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token?scopes=https://www.googleapis.com/auth/cloud-platform'
+    token_request_headers = {'Metadata-Flavor': 'Google'}
+    token_response = requests.get(metadata_server_token_url, headers=token_request_headers)
+    token_response_decoded = token_response.content.decode("utf-8")
+    jwt = json.loads(token_response_decoded)['access_token']
+    
+    # Use the api you mentioned to create the function
+    response = requests.post('https://cloudfunctions.googleapis.com/v1/projects/your-project/locations/us-central1/functions',
+                               json={"name":"projects/your-project/locations/us-central1/functions/funct","runtime":"python37","sourceArchiveUrl":"gs://bucket/main.zip","entryPoint":"hello_world","httpsTrigger": {} },
+                               headers={'Accept': 'application/json', 
+                                        'Content-Type': 'application/json',
+                                        'Authorization': 'Bearer {}'.format(jwt)} )   
+    if response:
+         return 'Success! Function Created'
+    else:
+         return str(response.json())  
+        
+
+```
+
+Let me know if you have any questions
