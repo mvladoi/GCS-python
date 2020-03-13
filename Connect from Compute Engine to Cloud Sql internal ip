@@ -1,0 +1,44 @@
+#How to connect from Compute Engine to Cloud SQL internal ip address (PHP)
+
+> Your Compute Engine instance must be in the same region as your Cloud
+> SQL instance, and on the network configured for a private connection
+
+1.[Create the Cloud SQL](https://cloud.google.com/sql/docs/mysql/create-instance) instance with internal ip address . Create a user, password and database.
+
+2.[Getting started with PHP on Compute Engine](https://cloud.google.com/php/tutorials/getting-started-on-compute-engine)
+
+After you copied the `startup-script.sh` runt this command to create the instance:
+ 
+ 
+     gcloud compute instances create $MY_INSTANCE_NAME \
+    --image-family=ubuntu-1804-lts \
+    --image-project=ubuntu-os-cloud \
+    --machine-type=g1-small \
+    --scopes userinfo-email,cloud-platform,sql-admin  \
+    --metadata-from-file startup-script=scripts/startup-script.sh \
+    --zone $ZONE \
+    --tags http-server
+
+On the scopes we added `sql-admin`, then create the firewall rule.
+
+3.SSH to the instance you just created.
+
+4.Install `mysql`. You could add this part to the startup script.
+
+     sudo apt install mysql-client-core-5.7
+   
+5.Test if you can connect to SQL instance using internal ip address.
+
+    mysql --host=internall-ip-sql  --user=test --password
+
+6.If you are able to connect then :
+
+    cd /opt/app/routes
+    sudo nano web.php
+
+7.Add your code to `router->get('/', function (Request $request)`
+
+8.In the browser go to http://compute-engine-instance-externall-ip
+
+Success!
+     
