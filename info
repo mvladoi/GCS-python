@@ -5,3 +5,7 @@ Task Queues, Cron, Cloud Tasks & Cloud Scheduler traffic will be allowed by the 
 
 b.For App Engine Flex apps:
 Task Queues, Cron, Cloud Tasks & Cloud Scheduler traffic will be denied by the default rule if it is set to deny. In order to allow this traffic while the default rule is set to deny, users must create allow rules to whitelist two IPs (0.1.0.2 and 10.0.0.1)
+
+
+Fetch instruction from the browser
+fetch("https://us-central1-wave25-vladoi.cloudfunctions.net/cors", {method: 'put'}, {headers: {"Content-Type" : "json/application"}}).then(a => a.text().then(console.log))
