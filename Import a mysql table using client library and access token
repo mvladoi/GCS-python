@@ -1,0 +1,56 @@
+Using the metadata server to access a google access token 
+
+import requests
+import json
+
+METADATA_URL = 'http://metadata.google.internal/computeMetadata/v1/'
+METADATA_HEADERS = {'Metadata-Flavor': 'Google'}
+SERVICE_ACCOUNT = 'default'
+
+
+def import_table(request):
+    url = '{}instance/service-accounts/{}/token'.format(
+        METADATA_URL, SERVICE_ACCOUNT)
+
+    # Request an access token from the metadata server.
+    r = requests.get(url, headers=METADATA_HEADERS)
+    r.raise_for_status()
+
+    # Extract the access token from the response.
+    access_token = r.json()["access_token"]
+
+
+    body = json.dumps({'importContext': {'fileType': 'CSV',
+        'csvImportOptions': {'table': 'your_table'},
+        'uri': 'gs://temprun/your_dump_file',
+        'database': 'your_database'}})
+
+    response = requests.post(
+            url="https://www.googleapis.com/sql/v1beta4/projects/your_project/instances/your_sql_instance/import",
+            headers={"Content-Type": "application/json; charset=utf-8",
+                     "Authorization": "Bearer {}".format(access_token)
+            },
+            data=body)    
+
+    return  str(response)
+
+
+
+
+
+Using client libraries google-api-python-client:
+
+
+def import_table(request):
+
+    from googleapiclient.discovery import build
+    service = build('sqladmin', 'v1beta4')
+
+    body = json.dumps({'importContext': {'fileType': 'CSV',
+        'csvImportOptions': {'table': 'your_table'},
+        'uri': 'gs://temprun/your_dump_file',
+        'database': 'your_database'}})
+
+    service.instances().import_(project='your_project', instance='your_instance', body=body).execute()
+    
+    return "Table was imported"
