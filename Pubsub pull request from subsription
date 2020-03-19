@@ -1,0 +1,34 @@
+const pubsub = require('@google-cloud/pubsub');
+const subClient = new pubsub.v1.SubscriberClient();
+
+const subscriptionName = 'subname not full path';
+const projectId = 'my_project_id';
+const timeout = 60;
+
+
+
+exports.helloPubSub = async (event, context) => {
+
+const formattedSubscription = subClient.subscriptionPath(projectId, subscriptionName);
+
+const request = {
+  subscription: formattedSubscription,
+  maxMessages: 10,
+};
+
+const [response] = await subClient.pull(request);
+
+const ackIds = [];
+for (const message of response.receivedMessages) {
+  console.log(`Received message: ${message.message.data}`);
+  ackIds.push(message.ackId);
+}
+
+ const ackRequest = {
+ subscription: formattedSubscription,
+ ackIds: ackIds,
+};
+
+await subClient.acknowledge(ackRequest);
+
+};
