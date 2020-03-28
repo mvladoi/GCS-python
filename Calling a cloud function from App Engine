@@ -1,0 +1,83 @@
+To be able to call a cloud function with arguments from App Engine Application:
+
+1. Create a cloud function that [allows unauthenticated function invocation](https://cloud.google.com/functions/docs/securing/managing-access-iam) 
+
+2. Enable [CORS requests](https://cloud.google.com/functions/docs/writing/http#functions_http_cors_auth-python)
+
+```
+import requests
+import json
+
+from flask import escape
+
+def hello_http(request):
+
+    # Set CORS headers for the preflight request
+    if request.method == 'OPTIONS':
+        # Allows GET requests from any origin with the Content-Type
+        # header and caches preflight response for an 3600s
+        headers = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Max-Age': '3600'
+        }
+
+        return ('', 204, headers)
+
+    # Set CORS headers for the main request
+    headers = {
+        'Access-Control-Allow-Origin': '*'
+    }
+
+  
+  
+    request_json = request.get_json(silent=True)
+    request_args = request.args
+
+    if request_json and 'dataset_id' in request_json:
+        dataset_id = request_json['dataset_id']
+    elif request_args and 'dataset_id' in request_args:
+        dataset_id = request_args['dataset_id']
+    else:
+        dataset_id = 'default'
+    
+    print('Function got called with dataset id {}'.format(escape(dataset_id)))
+        
+    return 'This is you dataset id {}!'.format(escape(dataset_id), 200, headers )
+```
+
+
+3. Deploy [the quickstart for Python 3 in the App Engine Standard Environment](https://cloud.google.com/appengine/docs/standard/python3/quickstart)
+
+```
+from flask import Flask
+import requests
+import json
+
+
+
+# If `entrypoint` is not defined in app.yaml, App Engine will look for an app
+# called `app` in `main.py`.
+app = Flask(__name__)
+
+
+@app.route('/')
+def hello():
+    """Return a friendly HTTP greeting."""
+    response = requests.post('https://us-central1-your-project.cloudfunctions.net/function-2', data=json.dumps({"dataset_id":"m_your_dataset_id"}), headers={'Accept': 'application/json','Content-Type': 'application/json'})
+    return  'Response {}'.format(str(response))
+
+
+```
+
+4.Pass all your parameters to `data` in our case we pass `dataset_id` =  `m_your_dataset_id`
+
+5.Call the function by accessing `https://your-project.appspot.com`
+
+6.Check the logs:
+
+[![enter image description here][1]][1]
+
+
+  [1]: https://i.stack.imgur.com/dLZov.png
