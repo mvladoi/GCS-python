@@ -1,0 +1,63 @@
+Assuming you have a SQL database with an external ip address then you can connect using this code. The most important step is to deploy your cloud function with the following Environment Variable: `CLOUD_SQL_CONNECTION_NAME` = `your-project:us-central1:your-instance`. This will start the cloud sql proxy for you.
+
+
+```
+
+/**
+ * Responds to any HTTP request.
+ *
+ * @param {!express:Request} req HTTP request context.
+ * @param {!express:Response} res HTTP response context.
+ */
+
+
+
+exports.connect= (req, res) => {
+
+  
+  var mysql = require('mysql');
+
+ 
+
+  var pool = mysql.createPool({
+    socketPath: `/cloudsql/your-project:us-central1:your-instance`,
+    user            : 'test',
+    password        : 'root',
+    database        : 'data',
+    connectionLimit : 10,               // this is the max number of connections before your pool starts waiting for a release
+    multipleStatements : true           // I like this because it helps prevent nested sql statements, it can be buggy though, so be careful
+});
+  
+ 
+  
+   
+  pool.getConnection(function (err, conn) {
+    if (err)
+        return res.send(400);
+
+    // if you got a connection...
+    conn.query('SHOW DATABASES', function(err, rows) {
+        if(err) {
+            conn.release();
+            return res.send(400, 'Couldnt get a connection');
+        }
+
+        // for simplicity, just send the rows
+        res.status(200).send(rows);
+
+        // CLOSE THE CONNECTION
+        conn.release();
+    })
+
+    });
+
+
+
+  
+};
+
+```
+
+TEST THE FUNCTION:
+
+    [{"Database":"information_schema"},{"Database":"data"},{"Database":"mydatabase"},{"Database":"mysql"},{"Database":"performance_schema"},{"Database":"sys"}]
