@@ -1,0 +1,26 @@
+
+import logging
+import base64
+import google.cloud.logging # Don't conflict with standard logging
+from google.cloud.logging.handlers import CloudLoggingHandler
+client = google.cloud.logging.Client()
+handler = CloudLoggingHandler(client)
+cloud_logger = logging.getLogger('cloudLogger')
+cloud_logger.setLevel(logging.INFO) # defaults to WARN
+cloud_logger.addHandler(handler)
+
+
+
+def hello_pubsub(event, context):
+
+     import logging
+     cloud_logger.debug("Starting function")
+     cloud_logger.info("Hello")
+
+     cloud_logger.warning("warning ! ")
+    
+     pubsub_message = base64.b64decode(event['data']).decode('utf-8')
+     cloud_logger.info(pubsub_message)
+     cloud_logger.error("Exit function")
+ 
+     return 'OK', 200
