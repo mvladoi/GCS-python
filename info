@@ -9,3 +9,8 @@ Task Queues, Cron, Cloud Tasks & Cloud Scheduler traffic will be denied by the d
 
 Fetch instruction from the browser
 fetch("https://us-central1-wave25-vladoi.cloudfunctions.net/cors", {method: 'put'}, {headers: {"Content-Type" : "json/application"}}).then(a => a.text().then(console.log))
+
+
+
+Credentials 
+https://github.com/googleapis/google-auth-library-python/blob/master/docs/user-guide.rst
