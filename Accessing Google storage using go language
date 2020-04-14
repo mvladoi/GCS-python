@@ -1,0 +1,71 @@
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "os"
+    "net/http"
+    "golang.org/x/oauth2"
+    "golang.org/x/oauth2/google"
+    "golang.org/x/oauth2/jwt"
+    "log"
+)
+
+
+func serviceAccount(credentialFile string) (*oauth2.Token, error) {
+    b, err := ioutil.ReadFile(credentialFile)
+    if err != nil {
+        return nil, err
+    }
+    var c = struct {
+        Email      string `json:"client_email"`
+        PrivateKey string `json:"private_key"`
+    }{}
+    json.Unmarshal(b, &c)
+    config := &jwt.Config{
+        Email:      c.Email,
+        PrivateKey: []byte(c.PrivateKey),
+        Scopes: []string{
+            "https://www.googleapis.com/auth/cloud-platform",
+        },
+        TokenURL: google.JWTTokenURL,
+    }
+    token, err := config.TokenSource(oauth2.NoContext).Token()
+    if err != nil {
+        return nil, err
+    }
+    return token, nil
+}
+
+func main() {
+    token, err := serviceAccount("key.json") // Please set here
+    if err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
+
+
+    url := "https://storage.googleapis.com/storage/v1/b/temprun/o/file?alt=media"
+
+    // Create a Bearer string by appending string access token
+    var bearer = "Bearer " + token.AccessToken
+
+    // Create a new request using http
+    req, err := http.NewRequest("GET", url, nil)
+
+    // add authorization header to the req
+
+    req.Header.Add("Authorization", bearer)
+
+    // Send req using http Client
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Println("Error on response.\n[ERRO] -", err)
+    }
+
+    body, _ := ioutil.ReadAll(resp.Body)
+    log.Println(string([]byte(body)))
+
+}
