@@ -1,0 +1,109 @@
+I reproduced your use case and deployed to Google App Engine Standard
+
+
+`app.yaml`
+
+```
+runtime: python37
+
+handlers:
+
+  - url: /static
+    static_dir: template
+
+  - url: /.*
+    secure: always
+    redirect_http_response_code: 301
+    script: auto
+
+```
+
+`requirements.txt`
+
+```
+Flask==1.1.1
+google-cloud-storage
+```
+
+
+`main.py`
+
+```
+
+from flask import Flask
+from flask import render_template
+from google.cloud import storage
+import os
+
+# If `entrypoint` is not defined in app.yaml, App Engine will look for an app
+# called `app` in `main.py`.
+app = Flask(__name__)
+
+
+
+def get_blobs(bucket_name):
+    """Lists all the blobs in the bucket."""
+
+    storage_client = storage.Client()
+    # Note: Client.list_blobs requires at least package version 1.17.0.
+    blobs = storage_client.list_blobs(bucket_name)
+    b = list()
+    for blob in blobs:
+      b.append(blob.name)
+
+    return b
+
+
+@app.route('/blobs/<bucket_name>')
+def hello(bucket_name):
+    """Return a friendly HTTP greeting."""
+
+    print ("Test {}".format(bucket_name))
+    return render_template('index.html', blobs=get_blobs(bucket_name))
+
+
+if __name__ == '__main__':
+    # This is used when running locally only. When deploying to Google App
+    # Engine, a webserver process such as Gunicorn will serve the app. This
+    # can be configured by adding an `entrypoint` to app.yaml.
+    app.run(host='127.0.0.1', port=8080, debug=True)
+# [END gae_python37_app]
+
+```
+
+`templates/index.html`
+
+```
+<!doctype html>
+
+<html>
+<head>
+<title>Test</title>
+</head>
+
+<body>
+<h1>All the blobs </h1>
+{% for blob in blobs %}
+<p>{{ blob }}</p>
+{% endfor %}
+</body>
+</html>
+```
+
+To deploy to App Engine:
+
+      gcloud app deploy
+      gcloud app browse
+      #go to https://your_project.nw.r.appspot.com/blobs/your_bucket
+
+[![enter image description here][1]][1]
+
+
+  [1]: https://i.stack.imgur.com/h3jgCm.png
+
+
+To run this application locally you need to :
+
+1.[Create a service account](https://cloud.google.com/iam/docs/creating-managing-service-accounts) with Storage Admin Role
+
+2.[Set the default credentials](https://cloud.google.com/docs/authentication/production)
