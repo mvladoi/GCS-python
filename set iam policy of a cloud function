@@ -1,0 +1,26 @@
+from googleapiclient.discovery import build
+service = build('cloudfunctions', 'v1')
+
+project_id = ...
+location_id = ...
+function_id = ...
+resource = f'projects/{project_id}/locations/{location_id}/functions/{function_id}'
+
+set_iam_policy_request_body = {
+    'policy': {
+        "bindings": [
+            {
+              "role": "roles/cloudfunctions.invoker",
+              "members": ["allUsers"],
+            },
+        ],
+    },
+}
+
+request = service.projects().locations().functions().setIamPolicy(
+    resource=resource,
+    body=set_iam_policy_request_body,
+)
+response = request.execute()
+
+print(response)
